@@ -29,12 +29,13 @@ app.get('/claims', (req, res) => {
         .trim()
         .split('\n')
         .map(line => {
-          const match = line.match(/Claim Date: (.*?), Category: (.*?), Description: (.*)/);
+          const match = line.match(/\[.*\] ID: (\d+), Claim Date: (.*?), Category: (.*?), Description: (.*)/);
           if (match) {
             return {
-              claimDate: match[1],
-              category: match[2],
-              description: match[3],
+              id: Number(match[1]),
+              claimDate: match[2],
+              category: match[3],
+              description: match[4],
             };
           }
           return null;
@@ -54,7 +55,9 @@ app.post('/submit-claim', (req, res) => {
     return res.status(400).json({ message: 'Missing required fields.' });
   }
 
-  const logEntry = `[${new Date().toISOString()}] Claim Date: ${claimDate}, Category: ${category}, Description: ${description}\n`;
+  const id = Math.floor(Math.random() * 1000000);
+
+  const logEntry = `[${new Date().toISOString()}] ID: ${id}, Claim Date: ${claimDate}, Category: ${category}, Description: ${description}\n`;
 
   fs.appendFile(logFilePath, logEntry, (err) => {
     if (err) {
@@ -64,7 +67,7 @@ app.post('/submit-claim', (req, res) => {
 
     res.status(200).json({ 
         message: 'Claim submitted successfully.', 
-        claim: { claimDate, category, description } 
+        claim: { claimDate, category, description, id } 
       });
   });
 });
