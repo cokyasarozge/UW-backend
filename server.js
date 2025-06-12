@@ -19,33 +19,47 @@ app.use(bodyParser.json());
 const logFilePath = path.join(__dirname, 'claims.log');
 
 app.get('/claims', (req, res) => {
-    fs.readFile(logFilePath, 'utf8', (err, data) => {
-      if (err) {
-        console.error('Failed to read log file:', err);
-        return res.status(500).json({ message: 'Server error.' });
+  fs.readFile(logFilePath, 'utf8', (err, data) => {
+    if (err) {
+      // If file doesn't exist, return empty array, not error
+      if (err.code === 'ENOENT') {
+        console.log('Log file not found, returning empty claims array');
+        return res.json([]);
       }
-  
-      const claims = data
-        .trim()
-        .split('\n')
-        .map(line => {
-          const match = line.match(/\[.*\] ID: (\d+), Claim Date: (.*?), Category: (.*?), Description: (.*)/);
-          if (match) {
-            return {
-              id: Number(match[1]),
-              claimDate: match[2],
-              category: match[3],
-              description: match[4],
-            };
-          }
-          return null;
-        })
-        .filter(Boolean);
-  
-      res.json(claims);
-    });
-  });
 
+      // Other errors, return server error
+      console.error('Failed to read log file:', err);
+      return res.status(500).json({ message: 'Server error.' });
+    }
+
+    // If file is empty or only whitespace, return empty array
+    if (!data.trim()) {
+      console.log('Log file empty, returning empty claims array');
+      return res.json([]);
+    }
+
+    // Parse claims lines into objects
+    const claims = data
+      .trim()
+      .split('\n')
+      .map(line => {
+        const match = line.match(/\[.*\] ID: (\d+), Claim Date: (.*?), Category: (.*?), Description: (.*)/);
+        if (match) {
+          return {
+            id: Number(match[1]),
+            claimDate: match[2],
+            category: match[3],
+            description: match[4],
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    // Return the array (may be empty)
+    return res.json(claims);
+  });
+});
   
 
 app.post('/submit-claim', (req, res) => {
