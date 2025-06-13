@@ -47,7 +47,7 @@ app.get('/claims', (req, res) => {
         if (match) {
           return {
             id: Number(match[1]),
-            claimDate: match[2],
+            date: match[2],
             category: match[3],
             description: match[4],
           };
@@ -60,18 +60,98 @@ app.get('/claims', (req, res) => {
     return res.json(claims);
   });
 });
+
+app.delete('/claims/:id', (req, res) => {
+  const claimIdToDelete = req.params.id;
+
+  fs.readFile(logFilePath, 'utf8', (err, data) => {
+    if (err) {
+      if (err.code === 'ENOENT') {
+        return res.status(404).json({ message: 'Log file not found.' });
+      }
+      return res.status(500).json({ message: 'Server error while reading file.' });
+    }
+
+    const lines = data.trim().split('\n');
+
+    // Filter out the claim with the matching ID
+    const filteredLines = lines.filter(line => {
+      const match = line.match(/ID: (\d+),/);
+      return match && match[1] !== claimIdToDelete;
+    });
+
+    // Check if any claim was actually removed
+    if (lines.length === filteredLines.length) {
+      return res.status(404).json({ message: 'Claim not found.' });
+    }
+
+    // Rewrite the file with the remaining claims
+    fs.writeFile(logFilePath, filteredLines.join('\n') + '\n', (writeErr) => {
+      if (writeErr) {
+        console.error('Error writing to file:', writeErr);
+        return res.status(500).json({ message: 'Server error while deleting claim.' });
+      }
+
+      res.status(200).json({ message: 'Claim deleted successfully.' });
+    });
+  });
+});
   
+app.put('/claims/:id', (req, res) => {
+  const claimIdToUpdate = req.params.id;
+  const { date, category, description } = req.body;
+
+  if (!date || !category || !description) {
+    return res.status(400).json({ message: 'Missing required fields.' });
+  }
+
+  fs.readFile(logFilePath, 'utf8', (err, data) => {
+    if (err) {
+      if (err.code === 'ENOENT') {
+        return res.status(404).json({ message: 'Log file not found.' });
+      }
+      return res.status(500).json({ message: 'Server error while reading file.' });
+    }
+
+    const lines = data.trim().split('\n');
+
+    let found = false;
+
+    const updatedLines = lines.map(line => {
+      const match = line.match(/ID: (\d+), Claim Date: (.*?), Category: (.*?), Description: (.*)/);
+      if (match && match[1] === claimIdToUpdate) {
+        found = true;
+        return `[${new Date().toISOString()}] ID: ${claimIdToUpdate}, Claim Date: ${date}, Category: ${category}, Description: ${description}`;
+      }
+      return line;
+    });
+
+    if (!found) {
+      return res.status(404).json({ message: 'Claim not found.' });
+    }
+
+    fs.writeFile(logFilePath, updatedLines.join('\n') + '\n', (writeErr) => {
+      if (writeErr) {
+        console.error('Error writing to file:', writeErr);
+        return res.status(500).json({ message: 'Server error while updating claim.' });
+      }
+
+      res.status(200).json({ message: 'Claim updated successfully.' });
+    });
+  });
+});
+
 
 app.post('/submit-claim', (req, res) => {
-  const { claimDate, category, description } = req.body;
+  const { date, category, description } = req.body;
 
-  if (!claimDate || !category || !description) {
+  if (!date || !category || !description) {
     return res.status(400).json({ message: 'Missing required fields.' });
   }
 
   const id = Math.floor(Math.random() * 1000000);
 
-  const logEntry = `[${new Date().toISOString()}] ID: ${id}, Claim Date: ${claimDate}, Category: ${category}, Description: ${description}\n`;
+  const logEntry = `[${new Date().toISOString()}] ID: ${id}, Claim Date: ${date}, Category: ${category}, Description: ${description}\n`;
 
   fs.appendFile(logFilePath, logEntry, (err) => {
     if (err) {
@@ -81,7 +161,7 @@ app.post('/submit-claim', (req, res) => {
 
     res.status(200).json({ 
         message: 'Claim submitted successfully.', 
-        claim: { claimDate, category, description, id } 
+        claim: { date, category, description, id } 
       });
   });
 });
